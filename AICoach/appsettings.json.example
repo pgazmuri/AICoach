@@ -1,5 +1,10 @@
 {
   "OpenAI": {
     "ApiKey": "YOUR_KEY_GOES_HERE"
+  },
+  "AzureOpenAI": {
+    "ApiKey": "YOUR_AZURE_OPENAI_API_KEY_HERE",
+    "Endpoint": "YOUR_AZURE_OPENAI_ENDPOINT_HERE",
+    "DeploymentName": "YOUR_DEPLOYMENT_NAME_HERE"
   }
 }

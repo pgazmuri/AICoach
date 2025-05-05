@@ -6,13 +6,14 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Windows.Forms;
-using OpenAI;
-using OpenAI.Chat;
+using Azure.AI.OpenAI;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.Transactions;
+using Azure;
+using OpenAI.Chat;
 
 namespace AICoach;
 
@@ -24,6 +25,8 @@ public class TrayAppContext : ApplicationContext
     private int screenshotIntervalMinutes = 3; // configurable
     private string promptFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "prompt.txt");
     private readonly OpenAI.Chat.ChatClient openAiClient;
+
+    private string suggestion = string.Empty;
 
     // Structure for GetLastInputInfo
     [StructLayout(LayoutKind.Sequential)]
@@ -41,10 +44,14 @@ public class TrayAppContext : ApplicationContext
     {
         // Load OpenAI API key from configuration
         var config = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(File.ReadAllText("appsettings.json"));
-        var openAiApiKey = config?["OpenAI"]?["ApiKey"] ?? throw new InvalidOperationException("OpenAI API key is missing.");
+        var openAiApiKey = config?["AzureOpenAI"]?["ApiKey"] ?? throw new InvalidOperationException("OpenAI API key is missing.");
+        var endpointUri = config?["AzureOpenAI"]?["Endpoint"] ?? throw new InvalidOperationException("OpenAI Endpoint is missing.");
+        //get endpoint and credential from config
+        var credential = new AzureKeyCredential(openAiApiKey);
+        var endpoint = new Uri(endpointUri);
 
         // Initialize OpenAI client - Use a model that supports vision
-        openAiClient = new OpenAI.Chat.ChatClient("gpt-4.1-mini", openAiApiKey);
+        openAiClient = new AzureOpenAIClient(endpoint, credential).GetChatClient("gpt-4.1-mini");
 
 
         // Build tray menu with Analyze and Exit
@@ -161,6 +168,7 @@ public class TrayAppContext : ApplicationContext
                 imageBytes = new BinaryData(ms.ToArray());
             }
 
+
             // 2. build chat messages
             var messages = new List<ChatMessage>
             {
@@ -189,6 +197,7 @@ public class TrayAppContext : ApplicationContext
     {
 		Logger.Instance.Log($"AI Suggestion: {suggestion}");
 		if(suggestion == "No Suggestion"){
+            this.suggestion = string.Empty;
 			return;
 		}
 
@@ -196,10 +205,19 @@ public class TrayAppContext : ApplicationContext
         trayIcon.BalloonTipText = suggestion;
         trayIcon.BalloonTipIcon = ToolTipIcon.Info;
 		trayIcon.BalloonTipClicked -= (s, e) => { }; // Unsubscribe previous event handlers to avoid duplicates
-		trayIcon.BalloonTipClicked += (s, e) =>
-		{
-			MessageBox.Show(suggestion, "AI Coach Suggestion", MessageBoxButtons.OK, MessageBoxIcon.Information);
-		};
+		this.suggestion = suggestion.Trim();
+        trayIcon.ShowBalloonTip(5000); // Show for 5 seconds
+    }
+
+    private void ShowSuggestion(string suggestion)
+    {
+        MessageBox.Show(this.suggestion, "AI Coach Suggestion", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+    private void ShowError(string errorMessage)
+    {
+        trayIcon.BalloonTipTitle = "AI Coach Error";
+        trayIcon.BalloonTipText = errorMessage;
+        trayIcon.BalloonTipIcon = ToolTipIcon.Error;
         trayIcon.ShowBalloonTip(5000); // Show for 5 seconds
     }
 
