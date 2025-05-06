@@ -15,5 +15,11 @@
   <ItemGroup>
     <Folder Include="Services\" />
   </ItemGroup>
+  
+  <ItemGroup>
+    <None Update="prompt.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
 </Project>
