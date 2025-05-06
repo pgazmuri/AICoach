@@ -64,13 +64,18 @@ public class TrayAppContext : ApplicationContext
         Logger.Instance.Log("Analyze started.");
         try
         {
-            var screenshot = _screenshotService.CaptureScreenshot();
-            Logger.Instance.Log("Screenshot captured.");
+            // Capture and store a new screenshot
+            var record = _screenshotService.CaptureAndStoreScreenshot();
+            Logger.Instance.Log("Screenshot captured and added to history.");
+            
+            // Get all historical screenshots
+            var screenshotHistory = _screenshotService.GetScreenshotHistory();
+            Logger.Instance.Log($"Using {screenshotHistory.Count} screenshots from history for analysis.");
             
             string prompt = ReadPrompt();
-            Logger.Instance.Log($"Prompt read: {prompt}, sending to GPT.");
+            Logger.Instance.Log($"Prompt read: {prompt}, sending to GPT with screenshot history.");
             
-            string suggestion = await _openAiService.GetAISuggestionAsync(screenshot, prompt);
+            string suggestion = await _openAiService.GetAISuggestionFromHistoryAsync(screenshotHistory, prompt);
             if (!string.IsNullOrEmpty(suggestion) && !suggestion.StartsWith("Error:"))
                 _notificationService.ShowAISuggestion(suggestion);
         }
@@ -85,7 +90,7 @@ public class TrayAppContext : ApplicationContext
         if (!isPaused && _activityMonitorService.IsUserActive())
         {
             OnAnalyze(null, new EventArgs());
-            Logger.Instance.Log("User is active, screenshot taken.");
+            Logger.Instance.Log("User is active, screenshot taken and added to history.");
         }
     }
 
@@ -96,14 +101,13 @@ public class TrayAppContext : ApplicationContext
         if(activeWindowTitle.Length > 0)
             pre_pend = $"The active window in this screenshot is: {activeWindowTitle}. ";
         
-        try
-        {
+        try {
             if (File.Exists(promptFilePath))
                 return pre_pend + File.ReadAllText(promptFilePath);
         }
         catch { }
         
-        return pre_pend + "Analyze this screenshot and suggest if AI could help.";
+        return pre_pend + "Analyze these screenshots and suggest if AI could help. Note the progression of activities over time.";
     }
 
     private void OnPauseResume(object? sender, EventArgs e)

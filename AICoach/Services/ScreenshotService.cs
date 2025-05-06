@@ -5,6 +5,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace AICoach.Services
 {
@@ -15,6 +17,23 @@ namespace AICoach.Services
         
         [DllImport("user32.dll", SetLastError = true)]
         private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        private const int MaxHistorySize = 5;
+        private readonly Queue<ScreenshotRecord> _screenshotHistory = new Queue<ScreenshotRecord>();
+
+        public class ScreenshotRecord
+        {
+            public Bitmap Screenshot { get; set; }
+            public string WindowTitle { get; set; }
+            public DateTime Timestamp { get; set; }
+
+            public ScreenshotRecord(Bitmap screenshot, string windowTitle)
+            {
+                Screenshot = screenshot;
+                WindowTitle = windowTitle;
+                Timestamp = DateTime.Now;
+            }
+        }
 
         public Bitmap CaptureScreenshot()
         {
@@ -31,6 +50,37 @@ namespace AICoach.Services
                 g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
             }
             return bitmap;
+        }
+
+        public ScreenshotRecord CaptureAndStoreScreenshot()
+        {
+            var bitmap = CaptureScreenshot();
+            var windowTitle = GetActiveWindowTitle();
+            var record = new ScreenshotRecord(bitmap, windowTitle);
+            
+            AddToHistory(record);
+            
+            return record;
+        }
+
+        private void AddToHistory(ScreenshotRecord record)
+        {
+            _screenshotHistory.Enqueue(record);
+            
+            // Maintain history size
+            while (_screenshotHistory.Count > MaxHistorySize)
+            {
+                var oldRecord = _screenshotHistory.Dequeue();
+                // Dispose the bitmap to free resources
+                oldRecord.Screenshot.Dispose();
+            }
+            
+            Logger.Instance.Log($"Screenshot added to history. Current history size: {_screenshotHistory.Count}");
+        }
+
+        public IReadOnlyList<ScreenshotRecord> GetScreenshotHistory()
+        {
+            return _screenshotHistory.ToList();
         }
 
         public string GetActiveWindowTitle()
