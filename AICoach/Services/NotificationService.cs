@@ -28,7 +28,7 @@ namespace AICoach.Services
             }
 
             _trayIcon.BalloonTipTitle = "AI Coach";
-            _trayIcon.BalloonTipText = suggestion;
+            _trayIcon.BalloonTipText = _suggestion;
             _trayIcon.BalloonTipIcon = ToolTipIcon.Info;
             _trayIcon.BalloonTipClicked -= (s, e) => { }; // Unsubscribe previous event handlers to avoid duplicates
             _trayIcon.ShowBalloonTip(5000); // Show for 5 seconds
