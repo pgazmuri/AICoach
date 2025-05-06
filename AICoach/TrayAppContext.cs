@@ -13,6 +13,8 @@ public class TrayAppContext : ApplicationContext
     private System.Windows.Forms.Timer activityTimer;
     private string promptFilePath;
     private string suggestion = string.Empty;
+    private bool isPaused = false;
+    private ToolStripMenuItem pauseMenuItem;
     
     // Services
     private readonly ConfigurationService _configService;
@@ -34,6 +36,8 @@ public class TrayAppContext : ApplicationContext
         // Build tray menu with Analyze and Exit
         trayMenu = new ContextMenuStrip();
         trayMenu.Items.Add("Analyze...", null, OnAnalyze);
+        pauseMenuItem = new ToolStripMenuItem("Pause", null, OnPauseResume);
+        trayMenu.Items.Add(pauseMenuItem);
         trayMenu.Items.Add("Exit", null, OnExit);
 
         trayIcon = new NotifyIcon
@@ -78,7 +82,7 @@ public class TrayAppContext : ApplicationContext
 
     private void ActivityTimer_Tick(object? sender, EventArgs e)
     {
-        if (_activityMonitorService.IsUserActive())
+        if (!isPaused && _activityMonitorService.IsUserActive())
         {
             OnAnalyze(null, new EventArgs());
             Logger.Instance.Log("User is active, screenshot taken.");
@@ -100,6 +104,13 @@ public class TrayAppContext : ApplicationContext
         catch { }
         
         return pre_pend + "Analyze this screenshot and suggest if AI could help.";
+    }
+
+    private void OnPauseResume(object? sender, EventArgs e)
+    {
+        isPaused = !isPaused;
+        pauseMenuItem.Text = isPaused ? "Resume" : "Pause";
+        Logger.Instance.Log(isPaused ? "Paused." : "Resumed.");
     }
 
     private void OnExit(object? sender, EventArgs e)
