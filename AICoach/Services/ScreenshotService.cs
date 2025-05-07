@@ -17,6 +17,16 @@ namespace AICoach.Services
         
         [DllImport("user32.dll", SetLastError = true)]
         private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+        
+        [DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out POINT lpPoint);
+        
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int X;
+            public int Y;
+        }
 
         private const int MaxHistorySize = 5;
         private readonly Queue<ScreenshotRecord> _screenshotHistory = new Queue<ScreenshotRecord>();
@@ -37,19 +47,45 @@ namespace AICoach.Services
 
         public Bitmap CaptureScreenshot()
         {
-            Screen? primaryScreen = Screen.PrimaryScreen;
-            if (primaryScreen == null)
-            {
-                throw new InvalidOperationException("No primary screen detected.");
-            }
+            // Get the screen where the cursor is currently located
+            Screen cursorScreen = GetScreenWithCursor();
             
-            Rectangle bounds = primaryScreen.Bounds;
+            Rectangle bounds = cursorScreen.Bounds;
             Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height);
             using (Graphics g = Graphics.FromImage(bitmap))
             {
                 g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
             }
+            
+            Logger.Instance.Log($"Screenshot captured from screen at {bounds.Location}, size: {bounds.Size}");
             return bitmap;
+        }
+        
+        private Screen GetScreenWithCursor()
+        {
+            if (GetCursorPos(out POINT cursorPosition))
+            {
+                Point cursorPoint = new Point(cursorPosition.X, cursorPosition.Y);
+                
+                // Find which screen contains the cursor
+                foreach (Screen screen in Screen.AllScreens)
+                {
+                    if (screen.Bounds.Contains(cursorPoint))
+                    {
+                        Logger.Instance.Log($"Cursor found on screen: {screen.DeviceName} at position {cursorPoint}");
+                        return screen;
+                    }
+                }
+            }
+            
+            // Fallback to primary screen if cursor position can't be determined
+            Logger.Instance.Log("Could not determine cursor screen, falling back to primary screen");
+            Screen? primaryScreen = Screen.PrimaryScreen;
+            if (primaryScreen == null)
+            {
+                throw new InvalidOperationException("No primary screen detected.");
+            }
+            return primaryScreen;
         }
 
         public ScreenshotRecord CaptureAndStoreScreenshot()
