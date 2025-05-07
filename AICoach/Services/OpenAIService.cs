@@ -41,10 +41,11 @@ namespace AICoach.Services
         {
             try
             {
-                var screenshotCount = screenshotHistory.Count();
+                var screenshotRecords = screenshotHistory.ToList();
+                var screenshotCount = screenshotRecords.Count;
                 Logger.Instance.Log($"Generating AI suggestion with {screenshotCount} screenshot(s)");
                 
-                // Build chat messages with all screenshots
+                // Build chat messages with screenshots as separate messages
                 var messages = new List<ChatMessage>();
                 
                 // System message
@@ -52,30 +53,41 @@ namespace AICoach.Services
                     "You are an AI assistant analyzing a series of screenshots in chronological order to provide suggestions about how AI could be used to help perform the task shown in the screenshots. " +
                     "Use the chronological context to understand what the user is doing over time."));
                 
-                // Create user message with multiple screenshots
-                var contentParts = new List<ChatMessageContentPart>();
+                // Add the initial prompt with explanation
+                messages.Add(ChatMessage.CreateUserMessage(
+                    $"{prompt}\n\nI'll now share {screenshotCount} screenshots in chronological order from oldest to newest. " +
+                    "Each screenshot represents what I was working on at different points in time."));
                 
-                // Add the prompt with chronological context
-                var promptBuilder = new StringBuilder(prompt);
-                promptBuilder.AppendLine("\n\nThe following screenshots are in chronological order from oldest to newest:");
-                
-                int index = 1;
-                foreach (var record in screenshotHistory)
+                // Add each screenshot as a separate message with metadata
+                for (int i = 0; i < screenshotRecords.Count; i++)
                 {
-                    promptBuilder.AppendLine($"\nScreenshot {index}: Taken at {record.Timestamp}, Window Title: {record.WindowTitle}");
-                    index++;
+                    var record = screenshotRecords[i];
+                    var isLastScreenshot = (i == screenshotRecords.Count - 1);
+                    
+                    // Create message text based on position
+                    string messageText;
+                    if (isLastScreenshot)
+                    {
+                        messageText = $"This is the most recent screenshot, taken at {record.Timestamp}, Window: \"{record.WindowTitle}\". " +
+                                      "Only suggest AI-powered features that directly relate to what I'm doing in this final screenshot. " +
+                                      "If a suggestion isn't clearly relevant to what's shown here, don't include it.";
+                    }
+                    else
+                    {
+                        messageText = $"Screenshot {i+1} of {screenshotCount}, taken at {record.Timestamp}, Window: \"{record.WindowTitle}\"";
+                    }
+                    
+                    // Create content parts with text and image
+                    var contentParts = new List<ChatMessageContentPart>
+                    {
+                        ChatMessageContentPart.CreateTextPart(messageText),
+                        ChatMessageContentPart.CreateImagePart(
+                            new BinaryData(_screenshotService.ConvertScreenshotToBytes(record.Screenshot)), 
+                            "image/png")
+                    };
+                    
+                    messages.Add(ChatMessage.CreateUserMessage(contentParts.ToArray()));
                 }
-
-                contentParts.Add(ChatMessageContentPart.CreateTextPart(promptBuilder.ToString()));
-                
-                // Add each screenshot as an image part
-                foreach (var record in screenshotHistory)
-                {
-                    var imageBytes = new BinaryData(_screenshotService.ConvertScreenshotToBytes(record.Screenshot));
-                    contentParts.Add(ChatMessageContentPart.CreateImagePart(imageBytes, "image/png"));
-                }
-
-                messages.Add(ChatMessage.CreateUserMessage(contentParts.ToArray()));
 
                 // Send to OpenAI via the SDK
                 var response = await _chatClient.CompleteChatAsync(messages);
