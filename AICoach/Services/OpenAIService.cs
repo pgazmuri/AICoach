@@ -37,7 +37,7 @@ namespace AICoach.Services
         }
 
         // New method using screenshot history
-        public async Task<string> GetAISuggestionFromHistoryAsync(IEnumerable<ScreenshotService.ScreenshotRecord> screenshotHistory, string prompt)
+        public async Task<string> GetAISuggestionFromHistoryAsync(IEnumerable<ScreenshotService.ScreenshotRecord> screenshotHistory, string prompt, List<string> _previousSuggestions = null)
         {
             try
             {
@@ -64,18 +64,30 @@ namespace AICoach.Services
                     var record = screenshotRecords[i];
                     var isLastScreenshot = (i == screenshotRecords.Count - 1);
                     
+					var previousSuggestions = _previousSuggestions != null && _previousSuggestions.Count > 0 ? string.Join(", ", _previousSuggestions) : "(No previous suggestions)";
+
                     // Create message text based on position
                     string messageText;
                     if (isLastScreenshot)
                     {
                         messageText = $"This is the most recent screenshot, taken at {record.Timestamp}, Window: \"{record.WindowTitle}\". " +
                                       "Only suggest AI-powered features that directly relate to what I'm doing in this final screenshot. " +
-                                      "If a suggestion isn't clearly relevant to what's shown here, don't include it.";
+                                      "If a suggestion isn't clearly relevant to what's shown here, don't include it." +
+									  $"If the suggestion is similar to a previous one, don't repeat it. Previous suggestions are: {previousSuggestions}. Do not give similar suggestions to those." +
+									  "If you have no suggestions, say 'No Suggestion'.";
+					}
+					else if (i == 0)
+					{
+						messageText = $"This is the first screenshot, taken at {record.Timestamp}, Window: \"{record.WindowTitle}\". " +
+									  "Please analyze the screenshots in chronological order and suggest AI-powered features that could help with the tasks shown.";
                     }
                     else
                     {
                         messageText = $"Screenshot {i+1} of {screenshotCount}, taken at {record.Timestamp}, Window: \"{record.WindowTitle}\"";
                     }
+
+					//log message text
+					Logger.Instance.Log($"Message text: {messageText}");
                     
                     // Create content parts with text and image
                     var contentParts = new List<ChatMessageContentPart>

@@ -22,6 +22,7 @@ public class TrayAppContext : ApplicationContext
     private readonly OpenAIService _openAiService;
     private readonly NotificationService _notificationService;
     private readonly ActivityMonitorService _activityMonitorService;
+    private List<string> _previousSuggestions = new List<string>();
 
     public TrayAppContext()
     {
@@ -40,10 +41,13 @@ public class TrayAppContext : ApplicationContext
         trayMenu.Items.Add(pauseMenuItem);
         trayMenu.Items.Add("Exit", null, OnExit);
 
+        // Load custom icon if it exists, otherwise use system icon
+        Icon customIcon = LoadCustomIcon();
+
         trayIcon = new NotifyIcon
         {
             Text = "AI Coach",
-            Icon = SystemIcons.Application,
+            Icon = customIcon,
             ContextMenuStrip = trayMenu,
             Visible = true
         };
@@ -58,7 +62,24 @@ public class TrayAppContext : ApplicationContext
         activityTimer.Start();
     }
 
-    // New menu handler
+    private Icon LoadCustomIcon()
+    {
+        try
+        {
+            string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.ico");
+            if (File.Exists(iconPath))
+            {
+                return new Icon(iconPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"Failed to load custom icon: {ex.Message}");
+        }
+
+        return SystemIcons.Application; // Fallback to system icon
+    }
+
     private async void OnAnalyze(object? sender, EventArgs e)
     {
         Logger.Instance.Log("Analyze started.");
@@ -73,11 +94,13 @@ public class TrayAppContext : ApplicationContext
             Logger.Instance.Log($"Using {screenshotHistory.Count} screenshots from history for analysis.");
             
             string prompt = ReadPrompt();
-            Logger.Instance.Log($"Prompt read: {prompt}, sending to GPT with screenshot history.");
+            //Logger.Instance.Log($"Prompt read: {prompt}, sending to GPT with screenshot history.");
             
-            string suggestion = await _openAiService.GetAISuggestionFromHistoryAsync(screenshotHistory, prompt);
-            if (!string.IsNullOrEmpty(suggestion) && !suggestion.StartsWith("Error:"))
-                _notificationService.ShowAISuggestion(suggestion);
+            string suggestion = await _openAiService.GetAISuggestionFromHistoryAsync(screenshotHistory, prompt, _previousSuggestions);
+            if (!string.IsNullOrEmpty(suggestion) && !suggestion.StartsWith("Error:")){
+                string strSugestion = _notificationService.ShowAISuggestion(suggestion);
+                _previousSuggestions.Add(strSugestion);
+            }
         }
         catch (Exception ex)
         {

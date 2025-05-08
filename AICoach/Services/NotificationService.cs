@@ -8,6 +8,7 @@ namespace AICoach.Services
         private readonly NotifyIcon _trayIcon;
         private string _activity = string.Empty;
         private string _suggestion = string.Empty;
+        private string _prompt = string.Empty;
 
         public NotificationService(NotifyIcon trayIcon)
         {
@@ -17,31 +18,34 @@ namespace AICoach.Services
 
         private void TrayIcon_BalloonTipClicked(object? sender, EventArgs e)
         {
-            this.ShowSuggestionDialog(_suggestion);
+            ShowSuggestionDialog(_suggestion, _prompt);
         }
 
-        public void ShowAISuggestion(string response)
+        public string ShowAISuggestion(string response)
         {
             Logger.Instance.Log($"AI Suggestion: {response}");
             
             if (string.IsNullOrWhiteSpace(response) || response == "No Suggestion")
             {
-                return;
+                return "";
             }
 
             try
             {
                 // Try to parse as JSON
-                if (TryParseJsonResponse(response, out string activity, out string suggestion))
+                if (TryParseJsonResponse(response, out string activity, out string suggestion, out string prompt))
                 {
                     _activity = activity;
                     _suggestion = suggestion;
+                    _prompt = prompt;
 
                     // Show balloon tip with activity
                     _trayIcon.BalloonTipTitle = "AI Coach";
                     _trayIcon.BalloonTipText = _activity;
                     _trayIcon.BalloonTipIcon = ToolTipIcon.Info;
                     _trayIcon.ShowBalloonTip(5000); // Show for 5 seconds
+
+					return suggestion; // Return the suggestion for further processing if needed
                 }
                 else
                 {
@@ -54,10 +58,13 @@ namespace AICoach.Services
                 Logger.Instance.Log($"Error processing AI suggestion: {ex.Message}");
                 ShowError($"Error processing suggestion: {ex.Message}");
             }
+			
+			return ""; // Return empty string if no valid suggestion was found
         }
 
-        private bool TryParseJsonResponse(string response, out string activity, out string suggestion)
+        private bool TryParseJsonResponse(string response, out string activity, out string suggestion, out string prompt)
         {
+            prompt = string.Empty;
             activity = string.Empty;
             suggestion = string.Empty;
 
@@ -76,12 +83,15 @@ namespace AICoach.Services
 
                     // Extract required fields
                     if (root.TryGetProperty("activity", out JsonElement activityElement) &&
-                        root.TryGetProperty("suggestion", out JsonElement suggestionElement))
+                        root.TryGetProperty("suggestion", out JsonElement suggestionElement) &&
+                        root.TryGetProperty("prompt", out JsonElement promptElement))
                     {
                         activity = activityElement.GetString() ?? string.Empty;
                         suggestion = suggestionElement.GetString() ?? string.Empty;
+                        prompt = promptElement.GetString() ?? string.Empty;
 
-                        // Verify we have both fields
+                        // Verify we have both fields, we may not have a prompt
+                        // but we should have an activity and suggestion
                         if (!string.IsNullOrWhiteSpace(activity) && !string.IsNullOrWhiteSpace(suggestion))
                         {
                             return true;
@@ -97,9 +107,10 @@ namespace AICoach.Services
             return false;
         }
 
-        public void ShowSuggestionDialog(string suggestion)
+        public void ShowSuggestionDialog(string suggestion, string prompt)
         {
-            MessageBox.Show(suggestion, "AI Coach Suggestion", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            SuggestionPanel suggestionPanel = new SuggestionPanel(suggestion, prompt);
+            suggestionPanel.ShowDialog();
         }
 
         public void ShowError(string errorMessage)
